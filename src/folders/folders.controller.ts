@@ -38,9 +38,10 @@ export class FoldersController {
   @Post('/clear-bin')
   @UseGuards(AuthStrictGuard)
   async clearBin(@Req() req: RequestWithUser) {
+    const { userId } = req.user;
     const { ids } = req.body;
 
-    return this.foldersService.clearBin(ids);
+    return this.foldersService.clearBin(ids, userId);
   }
 
   @Put('/move')
@@ -74,7 +75,8 @@ export class FoldersController {
   @UseGuards(AuthStrictGuard)
   async saveText(@Req() req: RequestWithUser) {
     const { id, content } = req.body;
+    const { userId } = req.user;
 
-    return this.foldersService.saveText(id, content);
+    return this.foldersService.saveText(id, content, userId);
   }
 }

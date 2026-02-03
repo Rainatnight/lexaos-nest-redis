@@ -1,27 +1,42 @@
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Folder, FolderDocument } from './schemas/folders.schema';
 import { createId } from 'src/common/createId';
 import { sanitizeHtml } from 'src/common/sanitizehtml';
+import { RedisClientType } from 'redis';
 
 @Injectable()
 export class FoldersService {
   constructor(
+    @Inject('REDIS_CLIENT')
+    private readonly redis: RedisClientType,
+
     @InjectModel(Folder.name)
     private readonly folderModel: Model<FolderDocument>,
   ) {}
 
   async getFolders(userId: string) {
-    // Берём все папки пользователя, исключая служебные поля
+    const key = `folders:user:${userId}`;
+
+    const cached = await this.redis.get(key);
+    console.log(cached);
+    if (cached) {
+      return JSON.parse(cached as string);
+    }
+
     const items = await this.folderModel
       .find({ userId }, { __v: 0, userId: 0, createdAt: 0, updatedAt: 0 })
       .lean();
 
-    return items.map(({ _id, ...rest }) => ({
+    const folders = items.map(({ _id, ...rest }) => ({
       id: _id,
       ...rest,
     }));
+
+    await this.redis.set(key, JSON.stringify(folders), { EX: 10 });
+
+    return folders;
   }
 
   async createFolder(
@@ -44,10 +59,12 @@ export class FoldersService {
       content,
     });
 
+    await this.redis.del(`folders:user:${userId}`);
+
     return { id: folder._id };
   }
 
-  async clearBin(ids: string) {
+  async clearBin(ids: string, userId) {
     if (!Array.isArray(ids)) {
       throw new HttpException(
         {
@@ -56,7 +73,7 @@ export class FoldersService {
         HttpStatus.BAD_REQUEST,
       );
     }
-
+    await this.redis.del(`folders:user:${userId}`);
     await this.folderModel.deleteMany({ _id: { $in: ids } });
   }
 
@@ -72,7 +89,7 @@ export class FoldersService {
 
     const folder = await this.folderModel
       .findOneAndUpdate(
-        { _id: id, userId }, // проверяем, что папка принадлежит юзеру!
+        { _id: id, userId }, // проверяем, что папка принадлежит юзеру
         { x: newX, y: newY },
         { new: true },
       )
@@ -86,7 +103,7 @@ export class FoldersService {
         HttpStatus.BAD_REQUEST,
       );
     }
-
+    await this.redis.del(`folders:user:${userId}`);
     return folder;
   }
 
@@ -116,7 +133,7 @@ export class FoldersService {
         HttpStatus.BAD_REQUEST,
       );
     }
-
+    await this.redis.del(`folders:user:${userId}`);
     return folder;
   }
 
@@ -156,11 +173,11 @@ export class FoldersService {
         HttpStatus.BAD_REQUEST,
       );
     }
-
+    await this.redis.del(`folders:user:${userId}`);
     return folder;
   }
 
-  async saveText(id: string, content: string) {
+  async saveText(id: string, content: string, userId: string) {
     if (!id || typeof content !== 'string') {
       throw new HttpException(
         {
@@ -195,7 +212,7 @@ export class FoldersService {
         HttpStatus.BAD_REQUEST,
       );
     }
-
+    await this.redis.del(`folders:user:${userId}`);
     return { success: true };
   }
 }

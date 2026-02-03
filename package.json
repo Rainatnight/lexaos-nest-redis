@@ -36,6 +36,7 @@
     "mongoose": "^8.21.0",
     "multer": "^2.0.2",
     "passport": "^0.7.0",
+    "redis": "^5.10.0",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1"
   },
